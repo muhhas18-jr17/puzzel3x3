@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic Picture Puzzle</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#172033;color:white;text-align:center}
+h1{color:#ffc857;font-size:25px}
+.choose-btn{display:inline-block;background:#ffc857;color:#172033;padding:12px 20px;border-radius:8px;font-weight:bold;cursor:pointer;margin:10px}
+.info{display:flex;justify-content:space-around;gap:10px;margin:20px auto;max-width:400px}
+.info div{flex:1;background:#26344f;padding:12px;border-radius:10px}
+#puzzle{width:min(90vw,380px);aspect-ratio:1;margin:auto;display:grid;gap:0;padding:0;background:#ffc857;overflow:hidden}
+.tile{margin:0;padding:0;border:none;border-radius:0;background-repeat:no-repeat;cursor:pointer;min-width:0;min-height:0}
+.empty{background:#172033}
+button,select{padding:12px 18px;margin:8px 4px;border:none;border-radius:8px;font-size:15px}
+button{background:#ffc857;color:#172033;font-weight:bold}
+#message{color:#ffc857;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>🧩 CLASSIC PUZZLE</h1>
+<label for="photo" class="choose-btn">📷 Pilih Foto dari Galeri</label>
+<input type="file" id="photo" accept="image/*" hidden>
+<p>Susun kembali gambar seperti semula!</p>
+<div class="info">
+  <div>Langkah<br><b id="moves">0</b></div>
+  <div>Waktu<br><b id="time">00:00</b></div>
+</div>
+<select id="level" onchange="newGame()">
+  <option value="3">3 × 3</option>
+  <option value="4">4 × 4</option>
+</select>
+<div id="puzzle"></div>
+<br>
+<button onclick="newGame()">🔄 Acak Ulang</button>
+<p id="message"></p>
+
+<script>
+let selectedImage = "https://picsum.photos/id/237/600/600";
+let size = 3, tiles = [], moves = 0, seconds = 0, timer;
+const puzzle = document.getElementById("puzzle");
+
+function newGame() {
+  clearInterval(timer);
+  size = Number(document.getElementById("level").value);
+  moves = 0;
+  seconds = 0;
+  updateInfo();
+  document.getElementById("message").textContent = "";
+
+  tiles = Array.from({length: size * size}, (_, i) => i);
+  let empty = tiles.length - 1;
+
+  // Acak dengan langkah legal agar puzzle selalu bisa diselesaikan.
+  for (let i = 0; i < 200; i++) {
+    const neighbors = getNeighbors(empty);
+    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+    [tiles[empty], tiles[next]] = [tiles[next], tiles[empty]];
+    empty = next;
+  }
+
+  render();
+  timer = setInterval(() => {
+    seconds++;
+    updateInfo();
+  }, 1000);
+}
+
+function getNeighbors(index) {
+  const result = [];
+  const row = Math.floor(index / size);
+  const col = index % size;
+  if (row > 0) result.push(index - size);
+  if (row < size - 1) result.push(index + size);
+  if (col > 0) result.push(index - 1);
+  if (col < size - 1) result.push(index + 1);
+  return result;
+}
+
+function render() {
+  puzzle.innerHTML = "";
+  puzzle.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+
+  tiles.forEach((value, index) => {
+    const tile = document.createElement("button");
+    tile.className = "tile";
+
+    // Kosong saat bermain; gambar kepingan terakhir muncul setelah menang.
+    if (value === size * size - 1 && !isSolved()) {
+      tile.classList.add("empty");
+      tile.setAttribute("aria-label", "Kotak kosong");
+    } else {
+      const row = Math.floor(value / size);
+      const col = value % size;
+      const x = col * 100 / (size - 1);
+      const y = row * 100 / (size - 1);
+
+      tile.style.backgroundImage = `url("${selectedImage}")`;
+      tile.style.backgroundSize = `${size * 100}% ${size * 100}%`;
+      tile.style.backgroundPosition = `${x}% ${y}%`;
+      tile.setAttribute("aria-label", `Potongan ${value + 1}`);
+    }
+
+    tile.onclick = () => moveTile(index);
+    puzzle.appendChild(tile);
+  });
+}
+
+function moveTile(index) {
+  if (isSolved()) return;
+
+  const empty = tiles.indexOf(size * size - 1);
+  if (!getNeighbors(empty).includes(index)) return;
+
+  [tiles[index], tiles[empty]] = [tiles[empty], tiles[index]];
+  moves++;
+  updateInfo();
+
+  if (isSolved()) {
+    clearInterval(timer);
+    render(); // Kotak kosong berubah menjadi potongan gambar terakhir.
+    document.getElementById("message").textContent = "🎉 SELAMAT! PUZZLE SELESAI!";
+  } else {
+    render();
+  }
+}
+
+function isSolved() {
+  return tiles.every((value, index) => value === index);
+}
+
+function updateInfo() {
+  document.getElementById("moves").textContent = moves;
+  const min = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const sec = String(seconds % 60).padStart(2, "0");
+  document.getElementById("time").textContent = `${min}:${sec}`;
+}
+
+document.getElementById("photo").addEventListener("change", function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    alert("File harus berupa gambar!");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert("Ukuran foto maksimal 5 MB!");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      selectedImage = e.target.result;
+      newGame();
+    };
+    img.onerror = function() {
+      alert("Gambar gagal dibaca!");
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+newGame();
+</script>
+</body>
+</html>
